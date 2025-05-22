@@ -8,57 +8,64 @@ To design and deploy a "Chat with LLM" application by leveraging the Gradio Bloc
 ### DESIGN STEPS:
 
 #### STEP 1:
-Install Libraries: Install the necessary Python packages: diffusers, transformers, gradio, torch, torchvision, and accelerate using pip.
+Install Libraries: Use pip to install gradio, transformers, and accelerate.
 #### STEP 2:
-Import Modules: Import torch, StableDiffusionPipeline from diffusers, and gradio as gr.
+Import Gradio: Import gradio as gr for the user interface.
 #### STEP 3:
-Define Model and Device: Specify the pre-trained model ID (runwayml/stable-diffusion-v1-5) and determine the computation device (cuda if a GPU is available, otherwise cpu).
+Import Transformers: Import AutoTokenizer and AutoModelForCausalLM for the LLM.
 #### STEP 4:
-Load Stable Diffusion Pipeline: Load the pre-trained Stable Diffusion model using StableDiffusionPipeline.from_pretrained(), specifying the model ID, data type based on the device, and enabling safe tensors. Move the pipeline to the selected device.
+Import PyTorch: Import torch for deep learning operations.
 #### STEP 5:
-Enable Attention Slicing: Optimize memory usage by enabling attention slicing.
+Load Tokenizer: Initialize the tokenizer for your chosen model
 #### STEP 6:
-Define Image Generation Function: Create a function generate_image that takes a prompt as input, uses the loaded pipe to generate an image with specified height and width, and returns the generated image.
+Load Model: Load the pre-trained LLM model (e.g., tiiuae/falcon-rw-1b) and move it to a GPU if available.
 #### STEP 7:
-Create Gradio Interface: Define a Gradio Interface with the generate_image function as the core, a text input for the prompt, and an image output to display the result. Set a title and description for the interface.
+Set Model to Eval Mode: Put the model in evaluation mode to disable training-specific behaviors.
 #### STEP 8:
-Launch Gradio App: Launch the Gradio interface, making it publicly accessible via a shareable link.
+Define Respond Function: Create a function that takes a message and chat history, tokenizes the message, generates a response using the model, and updates the chat history.
 
 ### PROGRAM:
 ```
-!pip install diffusers transformers gradio torch torchvision accelerate safetensors
+!pip install gradio transformers accelerate -q
 
-import torch
-from diffusers import StableDiffusionPipeline
 import gradio as gr
+from transformers import AutoTokenizer, AutoModelForCausalLM
+import torch
 
-model_id = "runwayml/stable-diffusion-v1-5"
-device = "cuda" if torch.cuda.is_available() else "cpu"
+tokenizer = AutoTokenizer.from_pretrained("tiiuae/falcon-rw-1b")
+model = AutoModelForCausalLM.from_pretrained("tiiuae/falcon-rw-1b").to("cuda")
+model.eval()
 
-pipe = StableDiffusionPipeline.from_pretrained(
-    "runwayml/stable-diffusion-v1-5", 
-    torch_dtype=torch.float16 if device == "cuda" else torch.float32,
-    use_safetensors=True
-).to(device)
+def respond(message, chat_history):
+    chat_history = chat_history or []
+    chat_history.append(("User", message))
+    inputs = tokenizer(message, return_tensors="pt").to("cuda")
+    with torch.no_grad():
+        outputs = model.generate(
+            **inputs,
+            max_new_tokens=100,
+            temperature=0.7,
+            top_p=0.9,
+            repetition_penalty=1.2,
+            do_sample=True
+        )
+    response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    response = response.split(message, 1)[-1].strip() 
+    chat_history.append(("AI", response))
+    return chat_history, chat_history
 
-pipe.enable_attention_slicing()
 
-def generate_image(prompt):
-    image = pipe(prompt, height=512, width=512).images[0]
-    return image
-
-demo = gr.Interface(
-    fn=generate_image,
-    inputs=gr.Textbox(label="Enter your image prompt", placeholder="e.g., A castle in the clouds at sunset"),
-    outputs=gr.Image(label="Generated Image"),
-    title="AI Image Generator",
-    description="Generate images from your imagination using Stable Diffusion v1.5 + Gradio UI"
-)
-demo.launch(share=True)
+with gr.Blocks() as demo:
+    gr.Markdown("Chat with Local LLM ")
+    chatbot_ui = gr.Chatbot(label="Chatbot", type='tuples') 
+    txt = gr.Textbox(label="Type your message here...", placeholder="Ask anything...")
+    state = gr.State([])
+    txt.submit(respond, [txt, state], [chatbot_ui, state])
+demo.launch()
 ```
 
 ### OUTPUT:
-![image](https://github.com/user-attachments/assets/19cd717d-79f7-4f3e-837d-79f3b011b4d4)
+![image](https://github.com/user-attachments/assets/29363766-a24b-461c-9bf6-1cbe88fea34d)
 
 ### RESULT:
 Therefore the code is excuted successfully.
